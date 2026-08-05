@@ -13,6 +13,10 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 
 from app.checker import check_account, check_session_token
+from app.db import (
+    activate_key, add_user_token, delete_user_token,
+    get_user_tokens, init_db, is_activated,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("tgbot")
@@ -27,25 +31,41 @@ EMAIL_RE = re.compile(r"^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$")
 
 WELCOME = (
     "🔍 <b>ChatGPT Account Checker Bot</b>\n\n"
-    "Gửi danh sách tài khoản, mỗi dòng một tài khoản:\n\n"
-    "<b>Mode Email/Pass (1 dòng):</b>\n"
-    "<code>email|password|totp_secret</code>\n"
+    "Gửi danh sách tài khoản để kiểm tra:\n\n"
+    "<b>Email/Pass (1 dòng):</b>\n"
+    "<code>email|password|totp</code>\n"
     "<code>email|password</code>\n\n"
-    "<b>Mode Email/Pass (3 dòng):</b>\n"
-    "<code>email\npassword\ntotp_secret</code>\n\n"
-    "<b>Mode Token/Session:</b>\n"
-    "<code>eyJxxx...</code>  (JWT Bearer)\n"
-    "<code>session_token_value</code>\n\n"
-    "/help — xem hướng dẫn lại"
+    "<b>Email/Pass (3 dòng):</b>\n"
+    "<code>email\npassword\ntotp</code>\n\n"
+    "<b>Token/Session:</b>\n"
+    "<code>eyJxxx...</code>\n\n"
+    "<b>Lệnh:</b>\n"
+    "/activate KEY — kích hoạt key\n"
+    "/mytokens — xem token đã lưu\n"
+    "/addtoken NHÃN TOKEN — lưu token\n"
+    "/deletetoken ID — xoá token\n"
+    "/help — xem lại hướng dẫn"
+)
+
+NOT_ACTIVATED = (
+    "🔐 Bạn chưa kích hoạt.\n\n"
+    "Dùng lệnh:\n<code>/activate YOUR-KEY-HERE</code>"
 )
 
 
 # ---------------------------------------------------------------------------
-# Input parsing
+# Helpers — user ID as string
 # ---------------------------------------------------------------------------
 
-def _normalize_pipe_spaces(line: str) -> str:
-    """Remove spaces around | so 'a | b | c' becomes 'a|b|c'."""
+def uid(message: Message) -> str:
+    return str(message.from_user.id)
+
+
+# ---------------------------------------------------------------------------
+# Input parsing (same logic as before)
+# ---------------------------------------------------------------------------
+
+def _normalize_pipe(line: str) -> str:
     return re.sub(r"\s*\|\s*", "|", line.strip())
 
 
@@ -54,34 +74,18 @@ def _is_email(s: str) -> bool:
 
 
 def _looks_like_token(s: str) -> bool:
-    """Heuristic: JWT (starts with eyJ) or long opaque string (no @ and no |)."""
     s = s.strip()
-    return (s.startswith("eyJ") or (len(s) > 20 and "|" not in s and "@" not in s))
+    return s.startswith("eyJ") or (len(s) > 20 and "|" not in s and "@" not in s)
 
 
 def parse_input(raw: str) -> tuple[str, list[dict], list[str]]:
-    """
-    Detect mode and parse input.
-
-    Returns:
-        mode: "account" | "token"
-        accounts: list of dicts with keys email/password/totp (account mode)
-                  or token (token mode)
-        errors: list of human-readable error strings
-    """
-    # --- Step 1: split into non-empty lines, normalize pipe spaces ---
-    raw_lines = [_normalize_pipe_spaces(l) for l in raw.splitlines() if l.strip()]
-
+    raw_lines = [_normalize_pipe(l) for l in raw.splitlines() if l.strip()]
     if not raw_lines:
         return "account", [], []
 
-    # --- Step 2: quick mode detection ---
-    # If any line contains an @ sign, treat as account mode.
-    has_email_line = any(_is_email(l.split("|")[0]) for l in raw_lines)
-    if not has_email_line:
-        # Token mode: every non-empty line is a token
-        tokens = []
-        errors = []
+    has_email = any(_is_email(l.split("|")[0]) for l in raw_lines)
+    if not has_email:
+        tokens, errors = [], []
         for idx, line in enumerate(raw_lines, 1):
             if _looks_like_token(line):
                 tokens.append({"token": line, "orig_line": idx})
@@ -89,86 +93,76 @@ def parse_input(raw: str) -> tuple[str, list[dict], list[str]]:
                 errors.append(f"Dòng {idx}: Không nhận ra định dạng — <code>{line[:60]}</code>")
         return "token", tokens, errors
 
-    # --- Step 3: Account mode – group lines into accounts ---
-    accounts: list[dict] = []
-    errors: list[str] = []
-
+    accounts, errors = [], []
     i = 0
     while i < len(raw_lines):
         line = raw_lines[i]
         parts = [p.strip() for p in line.split("|")]
         first = parts[0] if parts else ""
 
-        # Case A: line has pipes → try to parse as single-line account
         if "|" in line:
             if not _is_email(first):
-                errors.append(
-                    f"Dòng {i+1}: Phần trước dấu | không phải email — "
-                    f"<code>{line[:60]}</code>"
-                )
+                errors.append(f"Dòng {i+1}: Phần trước | không phải email — <code>{line[:60]}</code>")
                 i += 1
                 continue
-
-            email = first
             password = parts[1] if len(parts) > 1 else ""
             totp = parts[2] if len(parts) > 2 else ""
-
             if not password:
                 errors.append(f"Dòng {i+1}: Thiếu mật khẩu — <code>{line[:60]}</code>")
                 i += 1
                 continue
-
-            accounts.append({"email": email, "password": password, "totp": totp, "orig_line": i + 1})
+            accounts.append({"email": first, "password": password, "totp": totp, "orig_line": i + 1})
             i += 1
 
-        # Case B: line is just an email → try to consume next 1–2 lines as pass/totp
         elif _is_email(first):
             email = first
-            start_line = i + 1
-            password = ""
-            totp = ""
-
-            # consume next line as password (if it's not an email and has no pipe)
+            start = i + 1
+            password = totp = ""
             if i + 1 < len(raw_lines):
                 nxt = raw_lines[i + 1]
                 if "|" not in nxt and not _is_email(nxt.split("|")[0]):
                     password = nxt.strip()
                     i += 1
-
-                    # consume the line after as totp (same conditions)
                     if i + 1 < len(raw_lines):
                         nxt2 = raw_lines[i + 1]
                         if "|" not in nxt2 and not _is_email(nxt2.split("|")[0]):
                             totp = nxt2.strip()
                             i += 1
-
             if not password:
-                errors.append(
-                    f"Dòng {start_line}: Email <code>{email}</code> không có mật khẩu kèm theo"
-                )
+                errors.append(f"Dòng {start}: Email <code>{email}</code> không có mật khẩu")
             else:
-                accounts.append({"email": email, "password": password, "totp": totp, "orig_line": start_line})
-
+                accounts.append({"email": email, "password": password, "totp": totp, "orig_line": start})
             i += 1
 
-        # Case C: not an email, no pipe → unrecognized
         else:
-            errors.append(
-                f"Dòng {i+1}: Không nhận ra định dạng — <code>{line[:60]}</code>"
-            )
+            errors.append(f"Dòng {i+1}: Không nhận ra — <code>{line[:60]}</code>")
             i += 1
 
     return "account", accounts, errors
 
 
 # ---------------------------------------------------------------------------
-# Formatting helpers
+# Formatting
 # ---------------------------------------------------------------------------
 
 def _mask(s: str, show: int = 2) -> str:
-    if not s:
-        return "—"
-    return s[:show] + "*" * max(3, len(s) - show)
+    return (s[:show] + "*" * max(3, len(s) - show)) if s else "—"
+
+
+def _status_emoji(status: str) -> str:
+    return {"live": "✅", "die": "❌", "deactivated": "🚫", "locked": "🔒"}.get(status, "❓")
+
+
+def _fmt_result(r: dict, idx: int) -> str:
+    emoji = _status_emoji(r.get("status", "die"))
+    status = r.get("status", "die").upper()
+    if r.get("status") == "live":
+        plan = r.get("plan") or "Free"
+        user = r.get("user") or r.get("email") or ""
+        return f"{idx}. {emoji} <b>{status}</b> [{plan}] — <code>{user}</code>"
+    err = r.get("error") or ""
+    inp = (r.get("email") or r.get("input") or "")[:40]
+    return f"{idx}. {emoji} <b>{status}</b> — <code>{inp}</code>" + (f"\n    ↳ {err}" if err else "")
 
 
 def _preview_account(a: dict, idx: int) -> str:
@@ -181,67 +175,131 @@ def _preview_token(t: dict, idx: int) -> str:
     return f"{idx}. <code>{tok[:12]}...{tok[-6:]}</code>"
 
 
-def _status_emoji(status: str) -> str:
-    return {"live": "✅", "die": "❌", "deactivated": "🚫", "locked": "🔒"}.get(status, "❓")
-
-
-def _format_result(r: dict, idx: int) -> str:
-    emoji = _status_emoji(r.get("status", "die"))
-    status = r.get("status", "die").upper()
-    if r.get("status") == "live":
-        plan = r.get("plan") or "Free"
-        user = r.get("user") or r.get("email") or ""
-        return f"{idx}. {emoji} <b>{status}</b> [{plan}] — <code>{user}</code>"
-    else:
-        err = r.get("error") or ""
-        inp = (r.get("email") or r.get("input") or "")[:40]
-        return f"{idx}. {emoji} <b>{status}</b> — <code>{inp}</code>" + (f"\n    ↳ {err}" if err else "")
-
-
 # ---------------------------------------------------------------------------
-# Bot handlers
+# Commands
 # ---------------------------------------------------------------------------
 
 @dp.message(CommandStart())
 @dp.message(Command("help"))
-async def cmd_start(message: Message):
+async def cmd_help(message: Message):
     await message.answer(WELCOME, parse_mode="HTML")
 
 
-@dp.message(F.text)
-async def handle_accounts(message: Message):
-    raw = message.text.strip()
-    if not raw:
+@dp.message(Command("activate"))
+async def cmd_activate(message: Message):
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2 or not parts[1].strip():
+        await message.answer("Dùng: <code>/activate YOUR-KEY</code>", parse_mode="HTML")
         return
 
+    key = parts[1].strip()
+    result = activate_key(key, uid(message))
+    if result["ok"]:
+        await message.answer(
+            "✅ <b>Kích hoạt thành công!</b>\nBạn có thể bắt đầu check tài khoản.",
+            parse_mode="HTML",
+        )
+    else:
+        await message.answer(f"❌ {result['error']}", parse_mode="HTML")
+
+
+@dp.message(Command("mytokens"))
+async def cmd_my_tokens(message: Message):
+    if not is_activated(uid(message)):
+        await message.answer(NOT_ACTIVATED, parse_mode="HTML")
+        return
+
+    tokens = get_user_tokens(uid(message))
+    if not tokens:
+        await message.answer(
+            "📭 Bạn chưa lưu token nào.\n\nDùng:\n<code>/addtoken NHÃN TOKEN</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    lines = ["🔑 <b>Token đã lưu:</b>\n"]
+    for t in tokens:
+        preview = t["token"][:16] + "..."
+        lines.append(f"• <b>{t['label']}</b> — <code>{preview}</code>\n  ID: <code>{t['id']}</code>")
+    lines.append("\nXoá: <code>/deletetoken ID</code>")
+    await message.answer("\n".join(lines), parse_mode="HTML")
+
+
+@dp.message(Command("addtoken"))
+async def cmd_add_token(message: Message):
+    if not is_activated(uid(message)):
+        await message.answer(NOT_ACTIVATED, parse_mode="HTML")
+        return
+
+    parts = (message.text or "").split(maxsplit=2)
+    if len(parts) < 3:
+        await message.answer(
+            "Dùng: <code>/addtoken NHÃN TOKEN</code>\n\nVí dụ:\n<code>/addtoken TaiKhoanA eyJxxx...</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    label, token = parts[1].strip(), parts[2].strip()
+    result = add_user_token(uid(message), label, token)
+    await message.answer(
+        f"✅ Đã lưu token <b>{label}</b>\nID: <code>{result['id']}</code>",
+        parse_mode="HTML",
+    )
+
+
+@dp.message(Command("deletetoken"))
+async def cmd_delete_token(message: Message):
+    if not is_activated(uid(message)):
+        await message.answer(NOT_ACTIVATED, parse_mode="HTML")
+        return
+
+    parts = (message.text or "").split(maxsplit=1)
+    if len(parts) < 2:
+        await message.answer("Dùng: <code>/deletetoken ID</code>", parse_mode="HTML")
+        return
+
+    token_id = parts[1].strip()
+    ok = delete_user_token(uid(message), token_id)
+    if ok:
+        await message.answer(f"🗑 Đã xoá token <code>{token_id}</code>", parse_mode="HTML")
+    else:
+        await message.answer("❌ Không tìm thấy token với ID đó.", parse_mode="HTML")
+
+
+# ---------------------------------------------------------------------------
+# Main message handler — check accounts
+# ---------------------------------------------------------------------------
+
+@dp.message(F.text)
+async def handle_accounts(message: Message):
+    if not is_activated(uid(message)):
+        await message.answer(NOT_ACTIVATED, parse_mode="HTML")
+        return
+
+    raw = message.text.strip()
     mode, items, errors = parse_input(raw)
     total = len(items)
 
-    # --- Show parse errors first ---
     if errors:
         err_text = "⚠️ <b>Dòng không hợp lệ (bỏ qua):</b>\n" + "\n".join(errors)
         await message.answer(err_text, parse_mode="HTML")
 
     if total == 0:
         if not errors:
-            await message.answer("❌ Không nhận diện được tài khoản nào. Gửi /help để xem hướng dẫn.", parse_mode="HTML")
+            await message.answer("❌ Không nhận diện được tài khoản. /help để xem hướng dẫn.", parse_mode="HTML")
         return
 
-    # --- Preview: show what was recognized, mask sensitive fields ---
     mode_label = "Email/Pass" if mode == "account" else "Token/Session"
-    if mode == "account":
-        preview_lines = [_preview_account(a, i + 1) for i, a in enumerate(items)]
-    else:
-        preview_lines = [_preview_token(t, i + 1) for i, t in enumerate(items)]
-
-    preview_text = (
+    preview_lines = [
+        _preview_account(a, i + 1) if mode == "account" else _preview_token(a, i + 1)
+        for i, a in enumerate(items)
+    ]
+    status_msg = await message.answer(
         f"📋 <b>Đã nhận diện {total} tài khoản</b> (mode: <b>{mode_label}</b>):\n"
-        + "\n".join(preview_lines)
-        + "\n\n⏳ Đang kiểm tra..."
+        + "\n".join(preview_lines) + "\n\n⏳ Đang kiểm tra...",
+        parse_mode="HTML",
     )
-    status_msg = await message.answer(preview_text, parse_mode="HTML")
 
-    # --- Run checks concurrently ---
     semaphore = asyncio.Semaphore(CONCURRENCY)
     results: dict[int, dict] = {}
     completed = 0
@@ -260,31 +318,32 @@ async def handle_accounts(message: Message):
             if r.get("status") == "live":
                 live_count += 1
 
-            done_lines = [_format_result(results[i], i + 1) for i in range(total) if i in results]
+            done = [_fmt_result(results[i], i + 1) for i in range(total) if i in results]
             pending = total - completed
-            progress = "\n".join(done_lines)
+            text = "\n".join(done)
             if pending > 0:
-                progress += f"\n\n⏳ Còn lại: {pending}/{total}..."
-
+                text += f"\n\n⏳ Còn lại: {pending}/{total}..."
             try:
-                await status_msg.edit_text(progress, parse_mode="HTML")
+                await status_msg.edit_text(text, parse_mode="HTML")
             except Exception:
                 pass
 
     await asyncio.gather(*[asyncio.create_task(process(i, item)) for i, item in enumerate(items)])
 
-    # --- Final summary ---
-    die_count = total - live_count
-    summary = "\n".join(_format_result(results[i], i + 1) for i in range(total))
-    summary += f"\n\n📊 <b>Tổng:</b> {total} | ✅ Live: {live_count} | ❌ Die: {die_count}"
-
+    summary = "\n".join(_fmt_result(results[i], i + 1) for i in range(total))
+    summary += f"\n\n📊 <b>Tổng:</b> {total} | ✅ Live: {live_count} | ❌ Die: {total - live_count}"
     try:
         await status_msg.edit_text(summary, parse_mode="HTML")
     except Exception:
         await message.answer(summary, parse_mode="HTML")
 
 
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
 async def main():
+    init_db()
     logger.info("Telegram bot starting...")
     await dp.start_polling(bot)
 

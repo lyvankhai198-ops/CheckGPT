@@ -661,6 +661,99 @@
             transform: translateY(0);
             opacity: 1;
         }
+
+        /* ── Activation overlay ── */
+        .activation-overlay {
+            position: fixed; inset: 0;
+            background: rgba(10,10,15,0.96);
+            backdrop-filter: blur(20px);
+            z-index: 2000;
+            display: flex; align-items: center; justify-content: center;
+            transition: opacity 0.4s;
+        }
+        .activation-overlay.hidden { opacity: 0; pointer-events: none; }
+        .activation-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 48px 40px 40px;
+            text-align: center;
+            max-width: 420px; width: 92%;
+            box-shadow: 0 24px 80px rgba(0,0,0,0.6);
+        }
+        .activation-box .act-icon { font-size: 52px; margin-bottom: 16px; }
+        .activation-box h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; }
+        .activation-box p  { color: var(--text-secondary); font-size: 14px; margin-bottom: 24px; }
+        .activation-input {
+            width: 100%; padding: 12px 16px;
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); color: var(--text-primary);
+            font-size: 15px; font-family: monospace; letter-spacing: 2px;
+            text-align: center; text-transform: uppercase;
+            outline: none; transition: var(--transition); margin-bottom: 14px;
+        }
+        .activation-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+        .activation-btn {
+            width: 100%; padding: 13px;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            border: none; border-radius: var(--radius-sm);
+            color: #fff; font-size: 15px; font-weight: 600;
+            cursor: pointer; transition: var(--transition);
+        }
+        .activation-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .activation-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .act-error { color: var(--die); font-size: 13px; margin-top: 12px; min-height: 18px; }
+        /* key badge */
+        .key-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: 20px; padding: 4px 12px;
+            font-size: 12px; color: var(--live); cursor: pointer;
+            margin-top: 10px;
+        }
+        /* ── My Tokens card ── */
+        .tokens-list { display: flex; flex-direction: column; gap: 8px; }
+        .token-item {
+            display: flex; align-items: center; justify-content: space-between; gap: 8px;
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 10px 14px;
+            font-size: 13px;
+        }
+        .token-item-info { flex: 1; min-width: 0; }
+        .token-item-label { font-weight: 600; margin-bottom: 2px; }
+        .token-item-preview { color: var(--text-muted); font-family: monospace; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .token-item-actions { display: flex; gap: 6px; flex-shrink: 0; }
+        .btn-token-use {
+            padding: 5px 10px; border-radius: 6px; border: none;
+            background: var(--accent); color: #fff;
+            font-size: 12px; cursor: pointer; transition: var(--transition);
+        }
+        .btn-token-use:hover { background: var(--accent-hover); }
+        .btn-token-del {
+            padding: 5px 10px; border-radius: 6px; border: 1px solid var(--border);
+            background: transparent; color: var(--die);
+            font-size: 12px; cursor: pointer; transition: var(--transition);
+        }
+        .btn-token-del:hover { background: var(--die-bg); }
+        .add-token-form {
+            display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+            background: var(--bg-elevated); border: 1px solid var(--border);
+            border-radius: var(--radius-sm); padding: 12px;
+        }
+        .add-token-form input {
+            background: var(--bg-primary); border: 1px solid var(--border);
+            border-radius: 6px; padding: 8px 12px;
+            color: var(--text-primary); font-size: 13px; outline: none;
+            transition: var(--transition);
+        }
+        .add-token-form input:focus { border-color: var(--accent); }
+        .add-token-form-row { display: flex; gap: 8px; }
+        .btn-token-save {
+            padding: 8px 16px; border-radius: 6px; border: none;
+            background: var(--live); color: #000;
+            font-size: 13px; font-weight: 600; cursor: pointer; flex-shrink: 0;
+        }
+        .tokens-empty { text-align: center; color: var(--text-muted); padding: 16px 0; font-size: 13px; }
     </style>
 </head>
 <body>
@@ -670,6 +763,9 @@
             <div class="header-icon">🔍</div>
             <h1>ChatGPT Account Checker</h1>
             <p>Kiểm tra tình trạng tài khoản ChatGPT — Live or Die</p>
+            <div id="key-badge" class="key-badge" style="display:none;" title="Đã kích hoạt">
+                🔑 <span id="key-badge-text">Đã kích hoạt</span>
+            </div>
         </header>
 
         <div class="main-grid">
@@ -734,6 +830,30 @@ Mỗi dòng một tài khoản, định dạng: email|password|2fa_secret"></tex
                 </div>
             </div>
 
+            <!-- My Tokens Card -->
+            <div class="card" id="my-tokens-card" style="margin-top:16px;display:none;">
+                <div class="card-header">
+                    <div class="card-header-icon" style="background:rgba(108,92,231,0.1);color:var(--accent);">🔑</div>
+                    <h2>Token của tôi</h2>
+                    <button id="btn-toggle-add-token"
+                        style="margin-left:auto;background:var(--accent);border:none;border-radius:6px;padding:5px 12px;color:#fff;font-size:12px;cursor:pointer;">
+                        + Thêm
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="add-token-form" id="add-token-form" style="display:none;">
+                        <input id="new-token-label" placeholder="Nhãn (VD: TaiKhoanA)" maxlength="40">
+                        <div class="add-token-form-row">
+                            <input id="new-token-value" placeholder="Dán token / session tại đây..." style="flex:1;">
+                            <button class="btn-token-save" id="btn-save-token">Lưu</button>
+                        </div>
+                    </div>
+                    <div class="tokens-list" id="tokens-list">
+                        <div class="tokens-empty">Chưa có token nào. Nhấn "+ Thêm" để lưu.</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Right Panel: Results -->
             <div>
                 <!-- Stats -->
@@ -784,6 +904,19 @@ Mỗi dòng một tài khoản, định dạng: email|password|2fa_secret"></tex
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Activation Overlay -->
+    <div class="activation-overlay" id="activation-overlay">
+        <div class="activation-box">
+            <div class="act-icon">🔐</div>
+            <h2>Kích hoạt truy cập</h2>
+            <p>Nhập key kích hoạt để sử dụng ChatGPT Account Checker</p>
+            <input class="activation-input" id="activation-key-input"
+                   placeholder="XXXX-XXXX-XXXX-XXXX" maxlength="24" autocomplete="off" spellcheck="false">
+            <button class="activation-btn" id="activation-submit">Kích hoạt</button>
+            <div class="act-error" id="activation-error"></div>
         </div>
     </div>
 
@@ -923,7 +1056,7 @@ Mỗi dòng một tài khoản, định dạng: email|password|2fa_secret"></tex
             try {
                 const response = await fetch('/api/check', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-Session-ID': getSessionId() },
                     body: JSON.stringify({
                         mode: currentMode,
                         raw_text: text,
@@ -1095,6 +1228,177 @@ Mỗi dòng một tài khoản, định dạng: email|password|2fa_secret"></tex
             $toast.classList.add('show');
             setTimeout(() => $toast.classList.remove('show'), 3000);
         }
+
+        // ---------------------------------------------------------------------------
+        // Session & Activation
+        // ---------------------------------------------------------------------------
+        function getSessionId() {
+            let sid = localStorage.getItem('checker.session_id');
+            if (!sid) {
+                sid = 'web-' + crypto.randomUUID();
+                localStorage.setItem('checker.session_id', sid);
+            }
+            return sid;
+        }
+
+        async function checkSession() {
+            try {
+                const r = await fetch('/api/session', { headers: { 'X-Session-ID': getSessionId() } });
+                const d = await r.json();
+                return d.activated === true;
+            } catch { return false; }
+        }
+
+        function showActivated() {
+            document.getElementById('activation-overlay').classList.add('hidden');
+            document.getElementById('key-badge').style.display = 'inline-flex';
+            document.getElementById('my-tokens-card').style.display = '';
+            loadMyTokens();
+        }
+
+        // On page load: check activation
+        (async () => {
+            const activated = await checkSession();
+            if (activated) { showActivated(); return; }
+            // Show overlay
+            document.getElementById('activation-overlay').classList.remove('hidden');
+        })();
+
+        // Activation form
+        const $actInput  = document.getElementById('activation-key-input');
+        const $actBtn    = document.getElementById('activation-submit');
+        const $actError  = document.getElementById('activation-error');
+
+        $actInput.addEventListener('input', () => {
+            // Auto-format XXXX-XXXX-XXXX-XXXX
+            let v = $actInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+            v = v.match(/.{1,4}/g)?.join('-') || v;
+            $actInput.value = v.slice(0, 19);
+            $actError.textContent = '';
+        });
+
+        $actInput.addEventListener('keydown', e => { if (e.key === 'Enter') $actBtn.click(); });
+
+        $actBtn.addEventListener('click', async () => {
+            const key = $actInput.value.trim();
+            if (!key) { $actError.textContent = 'Vui lòng nhập key.'; return; }
+            $actBtn.disabled = true;
+            $actBtn.textContent = 'Đang kiểm tra...';
+            $actError.textContent = '';
+            try {
+                const r = await fetch('/api/activate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key, session_id: getSessionId() }),
+                });
+                if (r.ok) {
+                    showActivated();
+                    showToast('✅ Kích hoạt thành công!');
+                } else {
+                    const d = await r.json();
+                    $actError.textContent = d.detail || 'Key không hợp lệ.';
+                }
+            } catch { $actError.textContent = 'Lỗi kết nối, thử lại.'; }
+            $actBtn.disabled = false;
+            $actBtn.textContent = 'Kích hoạt';
+        });
+
+        // ---------------------------------------------------------------------------
+        // My Tokens
+        // ---------------------------------------------------------------------------
+        let myTokens = [];
+
+        async function loadMyTokens() {
+            try {
+                const r = await fetch('/api/my-tokens', { headers: { 'X-Session-ID': getSessionId() } });
+                if (!r.ok) return;
+                const d = await r.json();
+                myTokens = d.tokens || [];
+                renderTokens();
+            } catch {}
+        }
+
+        function renderTokens() {
+            const $list = document.getElementById('tokens-list');
+            if (!myTokens.length) {
+                $list.innerHTML = '<div class="tokens-empty">Chưa có token nào. Nhấn "+ Thêm" để lưu.</div>';
+                return;
+            }
+            $list.innerHTML = myTokens.map(t => `
+                <div class="token-item" data-id="${t.id}">
+                    <div class="token-item-info">
+                        <div class="token-item-label">${escapeHtml(t.label)}</div>
+                        <div class="token-item-preview">${escapeHtml(t.preview)}</div>
+                    </div>
+                    <div class="token-item-actions">
+                        <button class="btn-token-use" onclick="useToken('${t.id}')">Dùng</button>
+                        <button class="btn-token-del" onclick="deleteToken('${t.id}')">Xoá</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        async function useToken(id) {
+            try {
+                const r = await fetch(`/api/my-tokens/${id}/use`, { headers: { 'X-Session-ID': getSessionId() } });
+                if (!r.ok) { showToast('❌ Không lấy được token'); return; }
+                const d = await r.json();
+                // Switch to session mode and paste token
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                document.querySelector('[data-mode="session"]').classList.add('active');
+                currentMode = 'session';
+                $input.value = d.token;
+                $input.dispatchEvent(new Event('input'));
+                showToast('✅ Đã dán token vào ô nhập');
+                // Scroll to input
+                $input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            } catch { showToast('❌ Lỗi'); }
+        }
+
+        async function deleteToken(id) {
+            if (!confirm('Xoá token này?')) return;
+            try {
+                const r = await fetch(`/api/my-tokens/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'X-Session-ID': getSessionId() },
+                });
+                if (r.ok) {
+                    myTokens = myTokens.filter(t => t.id !== id);
+                    renderTokens();
+                    showToast('🗑 Đã xoá token');
+                }
+            } catch {}
+        }
+
+        // Toggle add-token form
+        document.getElementById('btn-toggle-add-token').addEventListener('click', () => {
+            const $form = document.getElementById('add-token-form');
+            $form.style.display = $form.style.display === 'none' ? '' : 'none';
+        });
+
+        document.getElementById('btn-save-token').addEventListener('click', async () => {
+            const label = document.getElementById('new-token-label').value.trim();
+            const token = document.getElementById('new-token-value').value.trim();
+            if (!label) { showToast('⚠️ Nhập nhãn cho token'); return; }
+            if (!token) { showToast('⚠️ Nhập giá trị token'); return; }
+            try {
+                const r = await fetch('/api/my-tokens', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Session-ID': getSessionId() },
+                    body: JSON.stringify({ label, token }),
+                });
+                if (r.ok) {
+                    document.getElementById('new-token-label').value = '';
+                    document.getElementById('new-token-value').value = '';
+                    document.getElementById('add-token-form').style.display = 'none';
+                    showToast('✅ Đã lưu token');
+                    await loadMyTokens();
+                } else {
+                    const d = await r.json();
+                    showToast('❌ ' + (d.detail || 'Lỗi'));
+                }
+            } catch { showToast('❌ Lỗi kết nối'); }
+        });
     </script>
 </body>
 </html>
