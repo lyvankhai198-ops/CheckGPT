@@ -208,8 +208,15 @@
                         <input type="number" id="g-maxuses" value="1" min="1" placeholder="Bỏ trống = vô hạn">
                     </div>
                     <div class="field">
-                        <label>Hết hạn sau (ngày)</label>
-                        <input type="number" id="g-expires" min="1" placeholder="Bỏ trống = không hết">
+                        <label>Hết hạn sau</label>
+                        <div style="display:flex;gap:6px;">
+                            <input type="number" id="g-expires" min="1" placeholder="Bỏ trống = không hết" style="width:90px;">
+                            <select id="g-expires-unit" style="padding:9px 10px;background:var(--bg4);border:1px solid var(--border);border-radius:var(--r2);color:var(--text);font-size:13px;outline:none;">
+                                <option value="minute">Phút</option>
+                                <option value="hour">Giờ</option>
+                                <option value="day" selected>Ngày</option>
+                            </select>
+                        </div>
                     </div>
                     <div class="field wide">
                         <label>Ghi chú</label>
@@ -440,8 +447,14 @@
         const count    = parseInt(document.getElementById('g-count').value) || 1;
         const maxUsesVal = document.getElementById('g-maxuses').value.trim();
         const maxUses  = maxUsesVal === '' ? null : parseInt(maxUsesVal);
-        const expiresVal = document.getElementById('g-expires').value.trim();
-        const expires  = expiresVal === '' ? null : parseInt(expiresVal);
+        const expiresVal  = document.getElementById('g-expires').value.trim();
+        const expiresUnit = document.getElementById('g-expires-unit').value;
+        let expires = null;
+        if (expiresVal !== '') {
+            const v = parseInt(expiresVal);
+            const mult = expiresUnit === 'minute' ? 1 : expiresUnit === 'hour' ? 60 : 1440;
+            expires = v * mult;
+        }
         const note     = document.getElementById('g-note').value.trim();
 
         document.getElementById('btn-gen').disabled = true;

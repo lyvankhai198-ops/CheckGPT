@@ -51,16 +51,17 @@ def _gen_key() -> str:
     return "-".join("".join(random.choices(chars, k=4)) for _ in range(4))
 
 
-def create_keys(count: int = 1, expires_days: int | None = None,
+def create_keys(count: int = 1, expires_minutes: int | None = None,
                 max_uses: int | None = 1, note: str = "") -> list[str]:
     """Generate activation keys.
 
-    max_uses=1  → single-use (one user per key, default)
-    max_uses=N  → up to N users can activate with the same key
-    max_uses=None → unlimited uses
+    max_uses=1       → single-use (one user per key, default)
+    max_uses=N       → up to N users can activate with the same key
+    max_uses=None    → unlimited uses
+    expires_minutes  → None = never expires; otherwise expires after N minutes
     """
     now = _now()
-    expires = (datetime.utcnow() + timedelta(days=expires_days)).isoformat() if expires_days else None
+    expires = (datetime.utcnow() + timedelta(minutes=expires_minutes)).isoformat() if expires_minutes else None
     keys: list[str] = []
     with _conn() as conn:
         for _ in range(count):

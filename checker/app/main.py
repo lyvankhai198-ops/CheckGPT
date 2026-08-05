@@ -67,8 +67,8 @@ class ActivateRequest(BaseModel):
 
 class GenerateKeysRequest(BaseModel):
     count: int = 1
-    expires_days: int | None = None
-    max_uses: int | None = 1   # 1 = single-use; None = unlimited
+    expires_minutes: int | None = None  # None = never; e.g. 60 = 1h, 1440 = 1 day
+    max_uses: int | None = 1            # 1 = single-use; None = unlimited
     note: str = ""
 
 
@@ -167,7 +167,7 @@ async def api_generate_keys(
         raise HTTPException(status_code=400, detail="count phải từ 1 đến 500")
     keys = create_keys(
         count=req.count,
-        expires_days=req.expires_days,
+        expires_minutes=req.expires_minutes,
         max_uses=req.max_uses,
         note=req.note,
     )
