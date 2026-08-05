@@ -13,10 +13,7 @@ from aiogram.filters import CommandStart, Command
 from aiogram.types import Message
 
 from app.checker import check_account, check_session_token
-from app.db import (
-    activate_key, add_user_token, delete_user_token,
-    get_user_tokens, init_db, is_activated,
-)
+from app.db import activate_key, init_db, is_activated
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger("tgbot")
@@ -41,9 +38,6 @@ WELCOME = (
     "<code>eyJxxx...</code>\n\n"
     "<b>Lệnh:</b>\n"
     "/activate KEY — kích hoạt key\n"
-    "/mytokens — xem token đã lưu\n"
-    "/addtoken NHÃN TOKEN — lưu token\n"
-    "/deletetoken ID — xoá token\n"
     "/help — xem lại hướng dẫn"
 )
 
@@ -201,69 +195,6 @@ async def cmd_activate(message: Message):
         )
     else:
         await message.answer(f"❌ {result['error']}", parse_mode="HTML")
-
-
-@dp.message(Command("mytokens"))
-async def cmd_my_tokens(message: Message):
-    if not is_activated(uid(message)):
-        await message.answer(NOT_ACTIVATED, parse_mode="HTML")
-        return
-
-    tokens = get_user_tokens(uid(message))
-    if not tokens:
-        await message.answer(
-            "📭 Bạn chưa lưu token nào.\n\nDùng:\n<code>/addtoken NHÃN TOKEN</code>",
-            parse_mode="HTML",
-        )
-        return
-
-    lines = ["🔑 <b>Token đã lưu:</b>\n"]
-    for t in tokens:
-        preview = t["token"][:16] + "..."
-        lines.append(f"• <b>{t['label']}</b> — <code>{preview}</code>\n  ID: <code>{t['id']}</code>")
-    lines.append("\nXoá: <code>/deletetoken ID</code>")
-    await message.answer("\n".join(lines), parse_mode="HTML")
-
-
-@dp.message(Command("addtoken"))
-async def cmd_add_token(message: Message):
-    if not is_activated(uid(message)):
-        await message.answer(NOT_ACTIVATED, parse_mode="HTML")
-        return
-
-    parts = (message.text or "").split(maxsplit=2)
-    if len(parts) < 3:
-        await message.answer(
-            "Dùng: <code>/addtoken NHÃN TOKEN</code>\n\nVí dụ:\n<code>/addtoken TaiKhoanA eyJxxx...</code>",
-            parse_mode="HTML",
-        )
-        return
-
-    label, token = parts[1].strip(), parts[2].strip()
-    result = add_user_token(uid(message), label, token)
-    await message.answer(
-        f"✅ Đã lưu token <b>{label}</b>\nID: <code>{result['id']}</code>",
-        parse_mode="HTML",
-    )
-
-
-@dp.message(Command("deletetoken"))
-async def cmd_delete_token(message: Message):
-    if not is_activated(uid(message)):
-        await message.answer(NOT_ACTIVATED, parse_mode="HTML")
-        return
-
-    parts = (message.text or "").split(maxsplit=1)
-    if len(parts) < 2:
-        await message.answer("Dùng: <code>/deletetoken ID</code>", parse_mode="HTML")
-        return
-
-    token_id = parts[1].strip()
-    ok = delete_user_token(uid(message), token_id)
-    if ok:
-        await message.answer(f"🗑 Đã xoá token <code>{token_id}</code>", parse_mode="HTML")
-    else:
-        await message.answer("❌ Không tìm thấy token với ID đó.", parse_mode="HTML")
 
 
 # ---------------------------------------------------------------------------

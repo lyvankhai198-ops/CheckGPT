@@ -1,4 +1,4 @@
-"""SQLite database for activation keys and user tokens."""
+"""SQLite database for bot activation keys and user management."""
 from __future__ import annotations
 
 import os
@@ -21,21 +21,20 @@ def init_db() -> None:
     with _conn() as conn:
         conn.executescript("""
             CREATE TABLE IF NOT EXISTS activation_keys (
-                key_code  TEXT PRIMARY KEY,
+                key_code   TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL,
                 expires_at TEXT,
-                used_by   TEXT,
-                used_at   TEXT,
-                note      TEXT DEFAULT ''
+                max_uses   INTEGER,        -- NULL = unlimited
+                use_count  INTEGER NOT NULL DEFAULT 0,
+                note       TEXT DEFAULT ''
             );
-            CREATE TABLE IF NOT EXISTS user_tokens (
-                id         TEXT PRIMARY KEY,
-                user_id    TEXT NOT NULL,
-                label      TEXT NOT NULL,
-                token      TEXT NOT NULL,
-                created_at TEXT NOT NULL
+            CREATE TABLE IF NOT EXISTS bot_users (
+                user_id      TEXT PRIMARY KEY,
+                username     TEXT,
+                key_code     TEXT NOT NULL,
+                activated_at TEXT NOT NULL,
+                FOREIGN KEY (key_code) REFERENCES activation_keys(key_code)
             );
-            CREATE INDEX IF NOT EXISTS idx_user_tokens_uid ON user_tokens(user_id);
         """)
 
 
@@ -52,7 +51,14 @@ def _gen_key() -> str:
     return "-".join("".join(random.choices(chars, k=4)) for _ in range(4))
 
 
-def create_keys(count: int = 1, expires_days: int | None = None, note: str = "") -> list[str]:
+def create_keys(count: int = 1, expires_days: int | None = None,
+                max_uses: int | None = 1, note: str = "") -> list[str]:
+    """Generate activation keys.
+
+    max_uses=1  → single-use (one user per key, default)
+    max_uses=N  → up to N users can activate with the same key
+    max_uses=None → unlimited uses
+    """
     now = _now()
     expires = (datetime.utcnow() + timedelta(days=expires_days)).isoformat() if expires_days else None
     keys: list[str] = []
@@ -60,38 +66,60 @@ def create_keys(count: int = 1, expires_days: int | None = None, note: str = "")
         for _ in range(count):
             key = _gen_key()
             conn.execute(
-                "INSERT INTO activation_keys (key_code, created_at, expires_at, note) VALUES (?,?,?,?)",
-                (key, now, expires, note),
+                "INSERT INTO activation_keys (key_code, created_at, expires_at, max_uses, note) VALUES (?,?,?,?,?)",
+                (key, now, expires, max_uses, note),
             )
             keys.append(key)
     return keys
 
 
-def activate_key(key_code: str, user_id: str) -> dict:
+def activate_key(key_code: str, user_id: str, username: str = "") -> dict:
+    """Activate a key for a Telegram user."""
     key_code = key_code.upper().strip().replace(" ", "")
     with _conn() as conn:
+        # If user already activated any key → check if still valid
+        existing = conn.execute(
+            "SELECT k.expires_at FROM bot_users u "
+            "JOIN activation_keys k ON u.key_code = k.key_code "
+            "WHERE u.user_id = ?", (user_id,)
+        ).fetchone()
+        if existing:
+            if existing["expires_at"] and datetime.fromisoformat(existing["expires_at"]) < datetime.utcnow():
+                # Expired — allow re-activation with new key (fall through)
+                conn.execute("DELETE FROM bot_users WHERE user_id = ?", (user_id,))
+            else:
+                return {"ok": True, "msg": "already_active"}
+
         row = conn.execute(
             "SELECT * FROM activation_keys WHERE key_code = ?", (key_code,)
         ).fetchone()
         if not row:
             return {"ok": False, "error": "Key không tồn tại"}
-        if row["used_by"]:
-            if row["used_by"] == user_id:
-                return {"ok": True, "error": None}   # same user re-activates → ok
-            return {"ok": False, "error": "Key đã được sử dụng"}
         if row["expires_at"] and datetime.fromisoformat(row["expires_at"]) < datetime.utcnow():
             return {"ok": False, "error": "Key đã hết hạn"}
+        max_uses = row["max_uses"]
+        use_count = row["use_count"]
+        if max_uses is not None and use_count >= max_uses:
+            return {"ok": False, "error": "Key đã đạt giới hạn sử dụng"}
+
         conn.execute(
-            "UPDATE activation_keys SET used_by=?, used_at=? WHERE key_code=?",
-            (user_id, _now(), key_code),
+            "INSERT INTO bot_users (user_id, username, key_code, activated_at) VALUES (?,?,?,?)",
+            (user_id, username or "", key_code, _now()),
         )
-    return {"ok": True, "error": None}
+        conn.execute(
+            "UPDATE activation_keys SET use_count = use_count + 1 WHERE key_code = ?",
+            (key_code,),
+        )
+    return {"ok": True, "msg": "activated"}
 
 
 def is_activated(user_id: str) -> bool:
     with _conn() as conn:
         row = conn.execute(
-            "SELECT expires_at FROM activation_keys WHERE used_by=?", (user_id,)
+            "SELECT k.expires_at FROM bot_users u "
+            "JOIN activation_keys k ON u.key_code = k.key_code "
+            "WHERE u.user_id = ?",
+            (user_id,),
         ).fetchone()
         if not row:
             return False
@@ -100,42 +128,46 @@ def is_activated(user_id: str) -> bool:
         return True
 
 
-def list_keys(limit: int = 100) -> list[dict]:
+def revoke_user(user_id: str) -> bool:
+    with _conn() as conn:
+        cur = conn.execute("DELETE FROM bot_users WHERE user_id = ?", (user_id,))
+        return cur.rowcount > 0
+
+
+def list_keys(limit: int = 200) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
-            "SELECT key_code, created_at, expires_at, used_by, used_at, note "
+            "SELECT key_code, created_at, expires_at, max_uses, use_count, note "
             "FROM activation_keys ORDER BY created_at DESC LIMIT ?",
             (limit,),
         ).fetchall()
         return [dict(r) for r in rows]
 
 
-# ---------------------------------------------------------------------------
-# User token vault
-# ---------------------------------------------------------------------------
-
-def add_user_token(user_id: str, label: str, token: str) -> dict:
-    tid = str(uuid.uuid4())[:8]
-    with _conn() as conn:
-        conn.execute(
-            "INSERT INTO user_tokens (id, user_id, label, token, created_at) VALUES (?,?,?,?,?)",
-            (tid, user_id, label, token, _now()),
-        )
-    return {"id": tid, "label": label}
-
-
-def get_user_tokens(user_id: str) -> list[dict]:
+def list_users(limit: int = 500) -> list[dict]:
     with _conn() as conn:
         rows = conn.execute(
-            "SELECT id, label, token, created_at FROM user_tokens WHERE user_id=? ORDER BY created_at DESC",
-            (user_id,),
+            "SELECT u.user_id, u.username, u.key_code, u.activated_at, "
+            "       k.expires_at, k.note "
+            "FROM bot_users u "
+            "JOIN activation_keys k ON u.key_code = k.key_code "
+            "ORDER BY u.activated_at DESC LIMIT ?",
+            (limit,),
         ).fetchall()
-        return [dict(r) for r in rows]
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d["expires_at"] and datetime.fromisoformat(d["expires_at"]) < datetime.utcnow():
+                d["status"] = "expired"
+            else:
+                d["status"] = "active"
+            result.append(d)
+        return result
 
 
-def delete_user_token(user_id: str, token_id: str) -> bool:
+def delete_key(key_code: str) -> bool:
     with _conn() as conn:
-        cur = conn.execute(
-            "DELETE FROM user_tokens WHERE id=? AND user_id=?", (token_id, user_id)
-        )
+        # Also remove users that used this key
+        conn.execute("DELETE FROM bot_users WHERE key_code = ?", (key_code,))
+        cur = conn.execute("DELETE FROM activation_keys WHERE key_code = ?", (key_code,))
         return cur.rowcount > 0

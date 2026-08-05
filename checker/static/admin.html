@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — ChatGPT Checker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --bg: #0a0a0f; --bg2: #12121a; --bg3: #16161f; --bg4: #1c1c28;
+            --border: #2a2a3a; --text: #e8e8f0; --muted: #8888a8; --dim: #5a5a78;
+            --accent: #6c5ce7; --green: #00d2a0; --red: #ff4757; --warn: #ffa502;
+            --r: 10px; --r2: 6px;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+        /* ── Auth gate ── */
+        .auth-gate {
+            position: fixed; inset: 0; background: var(--bg);
+            display: flex; align-items: center; justify-content: center; z-index: 999;
+        }
+        .auth-gate.hidden { display: none; }
+        .auth-box {
+            background: var(--bg3); border: 1px solid var(--border); border-radius: 16px;
+            padding: 40px; width: 380px; text-align: center;
+        }
+        .auth-box h2 { font-size: 20px; margin-bottom: 8px; }
+        .auth-box p  { color: var(--muted); font-size: 13px; margin-bottom: 24px; }
+        .auth-input {
+            width: 100%; padding: 11px 14px; background: var(--bg4);
+            border: 1px solid var(--border); border-radius: var(--r2);
+            color: var(--text); font-size: 14px; outline: none;
+            transition: border-color 0.2s; margin-bottom: 12px;
+        }
+        .auth-input:focus { border-color: var(--accent); }
+        .auth-btn {
+            width: 100%; padding: 11px; background: var(--accent);
+            border: none; border-radius: var(--r2); color: #fff;
+            font-size: 14px; font-weight: 600; cursor: pointer;
+        }
+        .auth-btn:hover { opacity: 0.9; }
+        .auth-error { color: var(--red); font-size: 13px; margin-top: 10px; min-height: 18px; }
+
+        /* ── Layout ── */
+        .topbar {
+            background: var(--bg3); border-bottom: 1px solid var(--border);
+            padding: 14px 28px; display: flex; align-items: center; gap: 16px;
+        }
+        .topbar h1 { font-size: 18px; font-weight: 700; }
+        .topbar a  { color: var(--muted); font-size: 13px; text-decoration: none; margin-left: auto; }
+        .topbar a:hover { color: var(--text); }
+        .badge-admin {
+            background: rgba(108,92,231,0.15); color: var(--accent);
+            border: 1px solid rgba(108,92,231,0.3);
+            border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 600;
+        }
+
+        .page { max-width: 1100px; margin: 0 auto; padding: 28px 20px; display: flex; flex-direction: column; gap: 24px; }
+
+        /* ── Card ── */
+        .card { background: var(--bg3); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+        .card-head {
+            padding: 16px 20px; border-bottom: 1px solid var(--border);
+            display: flex; align-items: center; gap: 10px;
+        }
+        .card-head h2 { font-size: 15px; font-weight: 600; flex: 1; }
+        .card-body { padding: 20px; }
+
+        /* ── Form ── */
+        .gen-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+        .field { display: flex; flex-direction: column; gap: 5px; min-width: 140px; }
+        .field label { font-size: 12px; color: var(--muted); font-weight: 500; }
+        .field input, .field select {
+            padding: 9px 12px; background: var(--bg4); border: 1px solid var(--border);
+            border-radius: var(--r2); color: var(--text); font-size: 13px; outline: none;
+            transition: border-color 0.2s;
+        }
+        .field input:focus, .field select:focus { border-color: var(--accent); }
+        .field input[type="number"] { width: 100px; }
+        .field.wide { flex: 1; min-width: 200px; }
+        .btn-gen {
+            padding: 9px 20px; background: var(--accent); border: none;
+            border-radius: var(--r2); color: #fff; font-size: 13px;
+            font-weight: 600; cursor: pointer; white-space: nowrap; align-self: flex-end;
+        }
+        .btn-gen:hover { opacity: 0.9; }
+        .btn-gen:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* ── Generated keys output ── */
+        .keys-output {
+            margin-top: 16px; padding: 14px; background: var(--bg4);
+            border: 1px solid var(--border); border-radius: var(--r2);
+            font-family: monospace; font-size: 13px; white-space: pre-wrap;
+            max-height: 200px; overflow-y: auto; display: none;
+        }
+        .keys-output.show { display: block; }
+        .copy-btn {
+            margin-top: 8px; padding: 6px 14px; background: transparent;
+            border: 1px solid var(--border); border-radius: var(--r2);
+            color: var(--muted); font-size: 12px; cursor: pointer;
+        }
+        .copy-btn:hover { color: var(--text); border-color: var(--text); }
+
+        /* ── Tables ── */
+        .tbl-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 10px 12px; color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); white-space: nowrap; }
+        td { padding: 10px 12px; border-bottom: 1px solid rgba(42,42,58,0.5); vertical-align: middle; }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: rgba(255,255,255,0.02); }
+        .mono { font-family: monospace; letter-spacing: 1px; }
+        .tag {
+            display: inline-block; padding: 2px 8px; border-radius: 20px;
+            font-size: 11px; font-weight: 600;
+        }
+        .tag.active  { background: rgba(0,210,160,0.12); color: var(--green); }
+        .tag.expired { background: rgba(255,71,87,0.12);  color: var(--red); }
+        .tag.partial { background: rgba(255,165,2,0.12);  color: var(--warn); }
+        .tag.full    { background: rgba(255,71,87,0.12);  color: var(--red); }
+
+        .btn-del {
+            padding: 4px 10px; background: transparent; border: 1px solid var(--border);
+            border-radius: var(--r2); color: var(--red); font-size: 12px; cursor: pointer;
+        }
+        .btn-del:hover { background: rgba(255,71,87,0.1); }
+        .empty-row td { text-align: center; color: var(--dim); padding: 24px; }
+
+        /* ── Stats bar ── */
+        .stats { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 4px; }
+        .stat { background: var(--bg4); border: 1px solid var(--border); border-radius: var(--r2); padding: 12px 18px; }
+        .stat .val { font-size: 22px; font-weight: 700; }
+        .stat .lbl { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+        /* ── Search ── */
+        .tbl-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+        .search-input {
+            padding: 8px 12px; background: var(--bg4); border: 1px solid var(--border);
+            border-radius: var(--r2); color: var(--text); font-size: 13px;
+            outline: none; width: 220px;
+        }
+        .search-input:focus { border-color: var(--accent); }
+        .refresh-btn {
+            padding: 7px 14px; background: transparent; border: 1px solid var(--border);
+            border-radius: var(--r2); color: var(--muted); font-size: 12px; cursor: pointer;
+            margin-left: auto;
+        }
+        .refresh-btn:hover { color: var(--text); }
+
+        /* ── Toast ── */
+        .toast {
+            position: fixed; bottom: 20px; right: 20px;
+            background: var(--bg4); border: 1px solid var(--border);
+            border-radius: var(--r2); padding: 10px 18px;
+            font-size: 13px; transform: translateY(20px); opacity: 0;
+            transition: all 0.3s; pointer-events: none; z-index: 500;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+    </style>
+</head>
+<body>
+
+<!-- Auth gate -->
+<div class="auth-gate" id="auth-gate">
+    <div class="auth-box">
+        <div style="font-size:40px;margin-bottom:14px;">🔐</div>
+        <h2>Admin Panel</h2>
+        <p>Nhập Admin Secret để đăng nhập</p>
+        <input class="auth-input" id="secret-input" type="password" placeholder="Admin secret..." autocomplete="off">
+        <button class="auth-btn" id="secret-btn">Đăng nhập</button>
+        <div class="auth-error" id="auth-error"></div>
+    </div>
+</div>
+
+<!-- Main UI (hidden until auth) -->
+<div id="main-ui" style="display:none;">
+    <div class="topbar">
+        <div style="font-size:22px;">⚙️</div>
+        <h1>ChatGPT Checker — Admin</h1>
+        <span class="badge-admin">ADMIN</span>
+        <a href="/">← Về trang checker</a>
+    </div>
+
+    <div class="page">
+
+        <!-- Stats -->
+        <div class="stats" id="stats-bar">
+            <div class="stat"><div class="val" id="s-keys">—</div><div class="lbl">Tổng key</div></div>
+            <div class="stat"><div class="val" id="s-used">—</div><div class="lbl">Đã dùng</div></div>
+            <div class="stat"><div class="val" id="s-users">—</div><div class="lbl">Bot user đang active</div></div>
+            <div class="stat"><div class="val" id="s-expired">—</div><div class="lbl">Đã hết hạn</div></div>
+        </div>
+
+        <!-- Generate keys -->
+        <div class="card">
+            <div class="card-head">
+                <span style="font-size:18px;">🔑</span>
+                <h2>Tạo key kích hoạt</h2>
+            </div>
+            <div class="card-body">
+                <div class="gen-form">
+                    <div class="field">
+                        <label>Số lượng key</label>
+                        <input type="number" id="g-count" value="1" min="1" max="500">
+                    </div>
+                    <div class="field">
+                        <label>Giới hạn user / key</label>
+                        <input type="number" id="g-maxuses" value="1" min="1" placeholder="Bỏ trống = vô hạn">
+                    </div>
+                    <div class="field">
+                        <label>Hết hạn sau (ngày)</label>
+                        <input type="number" id="g-expires" min="1" placeholder="Bỏ trống = không hết">
+                    </div>
+                    <div class="field wide">
+                        <label>Ghi chú</label>
+                        <input type="text" id="g-note" placeholder="VD: Gói tháng 8 — khách A">
+                    </div>
+                    <button class="btn-gen" id="btn-gen">⚡ Tạo key</button>
+                </div>
+                <div class="keys-output" id="keys-output"></div>
+                <div id="copy-row" style="display:none;">
+                    <button class="copy-btn" id="btn-copy-keys">📋 Copy tất cả key</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Keys table -->
+        <div class="card">
+            <div class="card-head">
+                <span style="font-size:18px;">📋</span>
+                <h2>Danh sách key</h2>
+            </div>
+            <div class="card-body">
+                <div class="tbl-toolbar">
+                    <input class="search-input" id="search-keys" placeholder="Tìm key...">
+                    <button class="refresh-btn" onclick="loadAll()">🔄 Làm mới</button>
+                </div>
+                <div class="tbl-wrap">
+                    <table id="keys-table">
+                        <thead>
+                            <tr>
+                                <th>Key</th>
+                                <th>Limit</th>
+                                <th>Đã dùng</th>
+                                <th>Hết hạn</th>
+                                <th>Ghi chú</th>
+                                <th>Ngày tạo</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="keys-body">
+                            <tr class="empty-row"><td colspan="7">Đang tải...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users table -->
+        <div class="card">
+            <div class="card-head">
+                <span style="font-size:18px;">👥</span>
+                <h2>Khách hàng (Bot users)</h2>
+            </div>
+            <div class="card-body">
+                <div class="tbl-toolbar">
+                    <input class="search-input" id="search-users" placeholder="Tìm user ID / username...">
+                    <button class="refresh-btn" onclick="loadAll()">🔄 Làm mới</button>
+                </div>
+                <div class="tbl-wrap">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th>Telegram ID</th>
+                                <th>Username</th>
+                                <th>Key đã dùng</th>
+                                <th>Trạng thái</th>
+                                <th>Kích hoạt lúc</th>
+                                <th>Hết hạn</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="users-body">
+                            <tr class="empty-row"><td colspan="7">Đang tải...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+    // ---------------------------------------------------------------------------
+    // Auth
+    // ---------------------------------------------------------------------------
+    let adminSecret = sessionStorage.getItem('admin.secret') || '';
+
+    function authHeader() {
+        return { 'Authorization': 'Bearer ' + adminSecret, 'Content-Type': 'application/json' };
+    }
+
+    async function tryLogin(secret) {
+        const r = await fetch('/api/admin/keys', { headers: { 'Authorization': 'Bearer ' + secret } });
+        return r.status !== 401 && r.status !== 503;
+    }
+
+    document.getElementById('secret-input').addEventListener('keydown', e => {
+        if (e.key === 'Enter') document.getElementById('secret-btn').click();
+    });
+
+    document.getElementById('secret-btn').addEventListener('click', async () => {
+        const secret = document.getElementById('secret-input').value.trim();
+        if (!secret) { document.getElementById('auth-error').textContent = 'Nhập secret trước.'; return; }
+        document.getElementById('secret-btn').textContent = 'Đang kiểm tra...';
+        const ok = await tryLogin(secret);
+        if (ok) {
+            adminSecret = secret;
+            sessionStorage.setItem('admin.secret', secret);
+            document.getElementById('auth-gate').classList.add('hidden');
+            document.getElementById('main-ui').style.display = '';
+            loadAll();
+        } else {
+            document.getElementById('auth-error').textContent = 'Sai secret. Thử lại.';
+        }
+        document.getElementById('secret-btn').textContent = 'Đăng nhập';
+    });
+
+    // Auto-login if stored
+    (async () => {
+        if (adminSecret) {
+            const ok = await tryLogin(adminSecret);
+            if (ok) {
+                document.getElementById('auth-gate').classList.add('hidden');
+                document.getElementById('main-ui').style.display = '';
+                loadAll();
+                return;
+            }
+            sessionStorage.removeItem('admin.secret');
+            adminSecret = '';
+        }
+    })();
+
+    // ---------------------------------------------------------------------------
+    // Data
+    // ---------------------------------------------------------------------------
+    let allKeys = [];
+    let allUsers = [];
+
+    async function loadAll() {
+        const [kr, ur] = await Promise.all([
+            fetch('/api/admin/keys',  { headers: authHeader() }),
+            fetch('/api/admin/users', { headers: authHeader() }),
+        ]);
+        if (!kr.ok || !ur.ok) { toast('❌ Lỗi tải dữ liệu'); return; }
+        const kd = await kr.json();
+        const ud = await ur.json();
+        allKeys  = kd.keys  || [];
+        allUsers = ud.users || [];
+        renderStats();
+        renderKeys(allKeys);
+        renderUsers(allUsers);
+    }
+
+    function renderStats() {
+        document.getElementById('s-keys').textContent    = allKeys.length;
+        document.getElementById('s-used').textContent    = allKeys.filter(k => k.use_count > 0).length;
+        document.getElementById('s-users').textContent   = allUsers.filter(u => u.status === 'active').length;
+        document.getElementById('s-expired').textContent = allUsers.filter(u => u.status === 'expired').length;
+    }
+
+    function fmtDate(iso) {
+        if (!iso) return '—';
+        const d = new Date(iso + 'Z');
+        return d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function keyStatus(k) {
+        if (k.expires_at && new Date(k.expires_at + 'Z') < new Date()) return '<span class="tag expired">Hết hạn</span>';
+        if (k.max_uses !== null && k.use_count >= k.max_uses) return '<span class="tag full">Full</span>';
+        if (k.use_count > 0) return '<span class="tag partial">Đang dùng</span>';
+        return '<span class="tag active">Chưa dùng</span>';
+    }
+
+    function renderKeys(keys) {
+        const q = document.getElementById('search-keys').value.toLowerCase();
+        const filtered = q ? keys.filter(k => k.key_code.toLowerCase().includes(q) || (k.note||'').toLowerCase().includes(q)) : keys;
+        const body = document.getElementById('keys-body');
+        if (!filtered.length) {
+            body.innerHTML = '<tr class="empty-row"><td colspan="7">Không có key nào</td></tr>';
+            return;
+        }
+        body.innerHTML = filtered.map(k => `
+            <tr>
+                <td class="mono">${k.key_code}</td>
+                <td>${k.max_uses === null ? '∞' : k.max_uses}</td>
+                <td>${k.use_count} ${keyStatus(k)}</td>
+                <td>${fmtDate(k.expires_at)}</td>
+                <td style="color:var(--muted)">${escHtml(k.note || '')}</td>
+                <td style="color:var(--dim);font-size:12px">${fmtDate(k.created_at)}</td>
+                <td><button class="btn-del" onclick="delKey('${k.key_code}')">Xoá</button></td>
+            </tr>
+        `).join('');
+    }
+
+    function renderUsers(users) {
+        const q = document.getElementById('search-users').value.toLowerCase();
+        const filtered = q ? users.filter(u =>
+            u.user_id.includes(q) || (u.username||'').toLowerCase().includes(q) || u.key_code.toLowerCase().includes(q)
+        ) : users;
+        const body = document.getElementById('users-body');
+        if (!filtered.length) {
+            body.innerHTML = '<tr class="empty-row"><td colspan="7">Không có user nào</td></tr>';
+            return;
+        }
+        body.innerHTML = filtered.map(u => `
+            <tr>
+                <td class="mono">${u.user_id}</td>
+                <td>${u.username ? '@' + escHtml(u.username) : '—'}</td>
+                <td class="mono" style="font-size:11px">${u.key_code}</td>
+                <td><span class="tag ${u.status}">${u.status === 'active' ? 'Active' : 'Hết hạn'}</span></td>
+                <td style="font-size:12px;color:var(--dim)">${fmtDate(u.activated_at)}</td>
+                <td style="font-size:12px;color:var(--dim)">${fmtDate(u.expires_at)}</td>
+                <td><button class="btn-del" onclick="revokeUser('${u.user_id}')">Thu hồi</button></td>
+            </tr>
+        `).join('');
+    }
+
+    // Search live filter
+    document.getElementById('search-keys').addEventListener('input', () => renderKeys(allKeys));
+    document.getElementById('search-users').addEventListener('input', () => renderUsers(allUsers));
+
+    // ---------------------------------------------------------------------------
+    // Actions
+    // ---------------------------------------------------------------------------
+    document.getElementById('btn-gen').addEventListener('click', async () => {
+        const count    = parseInt(document.getElementById('g-count').value) || 1;
+        const maxUsesVal = document.getElementById('g-maxuses').value.trim();
+        const maxUses  = maxUsesVal === '' ? null : parseInt(maxUsesVal);
+        const expiresVal = document.getElementById('g-expires').value.trim();
+        const expires  = expiresVal === '' ? null : parseInt(expiresVal);
+        const note     = document.getElementById('g-note').value.trim();
+
+        document.getElementById('btn-gen').disabled = true;
+        document.getElementById('btn-gen').textContent = 'Đang tạo...';
+
+        const r = await fetch('/api/admin/generate-keys', {
+            method: 'POST',
+            headers: authHeader(),
+            body: JSON.stringify({ count, max_uses: maxUses, expires_days: expires, note }),
+        });
+
+        document.getElementById('btn-gen').disabled = false;
+        document.getElementById('btn-gen').textContent = '⚡ Tạo key';
+
+        if (!r.ok) { const d = await r.json(); toast('❌ ' + (d.detail || 'Lỗi')); return; }
+
+        const d = await r.json();
+        const out = document.getElementById('keys-output');
+        out.textContent = d.keys.join('\n');
+        out.classList.add('show');
+        document.getElementById('copy-row').style.display = '';
+        toast(`✅ Đã tạo ${d.count} key`);
+        loadAll();
+    });
+
+    document.getElementById('btn-copy-keys').addEventListener('click', () => {
+        const text = document.getElementById('keys-output').textContent;
+        navigator.clipboard.writeText(text).then(() => toast('📋 Đã copy!')).catch(() => toast('Không copy được'));
+    });
+
+    async function delKey(code) {
+        if (!confirm(`Xoá key ${code}?\nUser đang dùng key này sẽ bị thu hồi quyền truy cập.`)) return;
+        const r = await fetch('/api/admin/keys/' + code, { method: 'DELETE', headers: authHeader() });
+        if (r.ok) { toast('🗑 Đã xoá key'); loadAll(); }
+        else { const d = await r.json(); toast('❌ ' + (d.detail || 'Lỗi')); }
+    }
+
+    async function revokeUser(uid) {
+        if (!confirm(`Thu hồi quyền user ${uid}?`)) return;
+        const r = await fetch('/api/admin/users/' + uid, { method: 'DELETE', headers: authHeader() });
+        if (r.ok) { toast('✅ Đã thu hồi'); loadAll(); }
+        else { const d = await r.json(); toast('❌ ' + (d.detail || 'Lỗi')); }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------------
+    function escHtml(s) {
+        const d = document.createElement('div'); d.textContent = s; return d.innerHTML;
+    }
+    function toast(msg) {
+        const $t = document.getElementById('toast');
+        $t.textContent = msg; $t.classList.add('show');
+        setTimeout(() => $t.classList.remove('show'), 3000);
+    }
+</script>
+</body>
+</html>
