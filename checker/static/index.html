@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ChatGPT Account Checker</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #12121a;
+            --bg-card: #16161f;
+            --bg-elevated: #1c1c28;
+            --border: #2a2a3a;
+            --border-hover: #3a3a5a;
+            --text-primary: #e8e8f0;
+            --text-secondary: #8888a8;
+            --text-muted: #5a5a78;
+            --accent: #6c5ce7;
+            --accent-hover: #7c6cf7;
+            --accent-glow: rgba(108, 92, 231, 0.3);
+            --live: #00d2a0;
+            --live-bg: rgba(0, 210, 160, 0.1);
+            --live-glow: rgba(0, 210, 160, 0.3);
+            --die: #ff4757;
+            --die-bg: rgba(255, 71, 87, 0.1);
+            --die-glow: rgba(255, 71, 87, 0.3);
+            --warn: #ffa502;
+            --warn-bg: rgba(255, 165, 2, 0.1);
+            --radius: 12px;
+            --radius-sm: 8px;
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Animated background */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background:
+                radial-gradient(ellipse 80% 50% at 20% 20%, rgba(108, 92, 231, 0.08), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(0, 210, 160, 0.05), transparent);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            margin-bottom: 32px;
+            padding: 32px 0 24px;
+        }
+
+        .header-icon {
+            width: 56px; height: 56px;
+            background: linear-gradient(135deg, var(--accent), #a855f7);
+            border-radius: 16px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 16px;
+            box-shadow: 0 8px 32px var(--accent-glow);
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        .header h1 {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #fff, #a0a0d0);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        /* Main layout */
+        .main-grid {
+            display: grid;
+            grid-template-columns: 1fr 1.4fr;
+            gap: 24px;
+            align-items: start;
+        }
+
+        @media (max-width: 900px) {
+            .main-grid { grid-template-columns: 1fr; }
+        }
+
+        /* Card */
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            border-color: var(--border-hover);
+        }
+
+        .card-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .card-header-icon {
+            width: 32px; height: 32px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+        .card-header h2 {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .card-body {
+            padding: 20px;
+        }
+
+        /* Mode toggle */
+        .mode-toggle {
+            display: flex;
+            background: var(--bg-primary);
+            border-radius: var(--radius-sm);
+            padding: 3px;
+            margin-bottom: 16px;
+            border: 1px solid var(--border);
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .mode-btn.active {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 2px 12px var(--accent-glow);
+        }
+
+        .mode-btn:not(.active):hover {
+            color: var(--text-primary);
+            background: var(--bg-elevated);
+        }
+
+        /* Textarea */
+        .input-area {
+            position: relative;
+            margin-bottom: 16px;
+        }
+
+        .input-area textarea {
+            width: 100%;
+            min-height: 220px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 12.5px;
+            line-height: 1.7;
+            padding: 14px 16px;
+            resize: vertical;
+            outline: none;
+            transition: var(--transition);
+        }
+
+        .input-area textarea:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px var(--accent-glow);
+        }
+
+        .input-area textarea::placeholder {
+            color: var(--text-muted);
+        }
+
+        .input-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .line-count {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            background: var(--bg-elevated);
+            border-radius: 6px;
+        }
+
+        /* Settings row */
+        .settings-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .setting-group {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .setting-group label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .setting-group select,
+        .setting-group input[type="number"] {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: inherit;
+            font-size: 12px;
+            padding: 6px 10px;
+            outline: none;
+            width: 70px;
+        }
+
+        .setting-group select:focus,
+        .setting-group input:focus {
+            border-color: var(--accent);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            width: 100%;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, var(--accent), #8b5cf6);
+            color: #fff;
+            border: none;
+            border-radius: var(--radius-sm);
+            font-family: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px var(--accent-glow);
+        }
+
+        .btn-primary:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary.running {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+        }
+
+        .btn-clear {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .btn-clear:hover {
+            border-color: var(--die);
+            color: var(--die);
+            background: var(--die-bg);
+        }
+
+        /* Progress bar */
+        .progress-container {
+            margin-top: 16px;
+            display: none;
+        }
+
+        .progress-container.active {
+            display: block;
+        }
+
+        .progress-bar-wrap {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-primary);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--accent), var(--live));
+            border-radius: 3px;
+            transition: width 0.5s ease;
+            width: 0%;
+        }
+
+        .progress-text {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        /* Stats bar */
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            padding: 14px 16px;
+            text-align: center;
+            transition: var(--transition);
+        }
+
+        .stat-card .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .stat-card .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+
+        .stat-card.live .stat-value { color: var(--live); }
+        .stat-card.die .stat-value { color: var(--die); }
+        .stat-card.total .stat-value { color: var(--accent); }
+
+        /* Results table */
+        .results-scroll {
+            max-height: 520px;
+            overflow-y: auto;
+            border-radius: var(--radius-sm);
+        }
+
+        .results-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .results-scroll::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        .results-scroll::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .results-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .results-table thead {
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+
+        .results-table th {
+            background: var(--bg-elevated);
+            padding: 10px 14px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-muted);
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .results-table td {
+            padding: 10px 14px;
+            font-size: 13px;
+            border-bottom: 1px solid rgba(42, 42, 58, 0.5);
+            transition: var(--transition);
+        }
+
+        .results-table tbody tr {
+            animation: fadeInRow 0.3s ease;
+        }
+
+        @keyframes fadeInRow {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .results-table tbody tr:hover td {
+            background: var(--bg-elevated);
+        }
+
+        /* Status badge */
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge.live {
+            background: var(--live-bg);
+            color: var(--live);
+            border: 1px solid rgba(0, 210, 160, 0.2);
+        }
+
+        .badge.die {
+            background: var(--die-bg);
+            color: var(--die);
+            border: 1px solid rgba(255, 71, 87, 0.2);
+        }
+
+        .badge.deactivated {
+            background: var(--warn-bg);
+            color: var(--warn);
+            border: 1px solid rgba(255, 165, 2, 0.2);
+        }
+
+        .badge.checking {
+            background: rgba(108, 92, 231, 0.1);
+            color: var(--accent);
+            border: 1px solid rgba(108, 92, 231, 0.2);
+        }
+
+        .badge-dot {
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .badge.live .badge-dot {
+            background: var(--live);
+            box-shadow: 0 0 6px var(--live-glow);
+            animation: pulse-dot 1.5s ease infinite;
+        }
+
+        .badge.die .badge-dot { background: var(--die); }
+        .badge.deactivated .badge-dot { background: var(--warn); }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        .plan-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .plan-badge.plus {
+            background: rgba(0, 210, 160, 0.1);
+            color: var(--live);
+        }
+
+        .plan-badge.pro {
+            background: rgba(168, 85, 247, 0.1);
+            color: #a855f7;
+        }
+
+        .plan-badge.team {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+        }
+
+        .plan-badge.free {
+            background: rgba(136, 136, 168, 0.1);
+            color: var(--text-muted);
+        }
+
+        .cell-email {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--text-secondary);
+            max-width: 200px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .cell-error {
+            font-size: 11px;
+            color: var(--die);
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Empty state */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--text-muted);
+        }
+
+        .empty-state .empty-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.4;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        /* Export buttons */
+        .export-bar {
+            display: flex;
+            gap: 8px;
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .btn-export {
+            padding: 6px 14px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-export:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+            background: rgba(108, 92, 231, 0.05);
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 16px; height: 16px;
+            border: 2px solid rgba(255,255,255,0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            display: inline-block;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Toast notification */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            color: var(--text-primary);
+            font-size: 13px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            transform: translateY(100px);
+            opacity: 0;
+            transition: var(--transition);
+            z-index: 100;
+        }
+
+        .toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-icon">🔍</div>
+            <h1>ChatGPT Account Checker</h1>
+            <p>Kiểm tra tình trạng tài khoản ChatGPT — Live or Die</p>
+        </header>
+
+        <div class="main-grid">
+            <!-- Left Panel: Input -->
+            <div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-icon" style="background: rgba(108, 92, 231, 0.1); color: var(--accent);">📋</div>
+                        <h2>Nhập tài khoản</h2>
+                    </div>
+                    <div class="card-body">
+                        <!-- Mode toggle -->
+                        <div class="mode-toggle">
+                            <button class="mode-btn active" data-mode="account" id="btn-mode-account">
+                                🔑 Email | Pass | 2FA
+                            </button>
+                            <button class="mode-btn" data-mode="session" id="btn-mode-session">
+                                🎫 Session / Token
+                            </button>
+                        </div>
+
+                        <!-- Textarea -->
+                        <div class="input-area">
+                            <textarea id="input-text" placeholder="user@example.com|Password123!|JBSWY3DPEHPK3PXP
+user2@example.com|Pass456!|KRSXG5CTMVRXEZLU
+
+Mỗi dòng một tài khoản, định dạng: email|password|2fa_secret"></textarea>
+                        </div>
+
+                        <div class="input-meta">
+                            <div class="line-count">
+                                📝 <span id="line-count">0</span> dòng
+                            </div>
+                            <button class="btn-clear" id="btn-clear" title="Xóa tất cả">✕ Xóa</button>
+                        </div>
+
+                        <!-- Settings -->
+                        <div class="settings-row">
+                            <div class="setting-group">
+                                <label>Concurrency:</label>
+                                <input type="number" id="concurrency" value="3" min="1" max="10">
+                            </div>
+                        </div>
+
+                        <!-- Submit button -->
+                        <button class="btn-primary" id="btn-check">
+                            <span>⚡</span>
+                            <span id="btn-text">Kiểm tra ngay</span>
+                        </button>
+
+                        <!-- Progress -->
+                        <div class="progress-container" id="progress-container">
+                            <div class="progress-bar-wrap">
+                                <div class="progress-bar" id="progress-bar"></div>
+                            </div>
+                            <div class="progress-text">
+                                <span id="progress-status">Đang kiểm tra...</span>
+                                <span id="progress-count">0 / 0</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel: Results -->
+            <div>
+                <!-- Stats -->
+                <div class="stats-bar">
+                    <div class="stat-card total">
+                        <div class="stat-value" id="stat-total">0</div>
+                        <div class="stat-label">Tổng</div>
+                    </div>
+                    <div class="stat-card live">
+                        <div class="stat-value" id="stat-live">0</div>
+                        <div class="stat-label">Live ✅</div>
+                    </div>
+                    <div class="stat-card die">
+                        <div class="stat-value" id="stat-die">0</div>
+                        <div class="stat-label">Die ❌</div>
+                    </div>
+                </div>
+
+                <!-- Results table -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-header-icon" style="background: rgba(0, 210, 160, 0.1); color: var(--live);">📊</div>
+                        <h2>Kết quả</h2>
+                    </div>
+                    <div class="results-scroll" id="results-scroll">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>Trạng thái</th>
+                                    <th>Email / Input</th>
+                                    <th>Gói</th>
+                                    <th>Chi tiết</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-body">
+                            </tbody>
+                        </table>
+                        <div class="empty-state" id="empty-state">
+                            <div class="empty-icon">🔮</div>
+                            <p>Dán tài khoản và nhấn "Kiểm tra ngay" để bắt đầu</p>
+                        </div>
+                    </div>
+                    <div class="export-bar" id="export-bar" style="display: none;">
+                        <button class="btn-export" id="btn-export-live">📥 Export Live</button>
+                        <button class="btn-export" id="btn-export-die">📥 Export Die</button>
+                        <button class="btn-export" id="btn-export-all">📥 Export All</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script>
+        // ---------------------------------------------------------------------------
+        // State
+        // ---------------------------------------------------------------------------
+        let currentMode = 'account';
+        let isRunning = false;
+        let results = [];
+        let totalLines = 0;
+
+        // ---------------------------------------------------------------------------
+        // Elements
+        // ---------------------------------------------------------------------------
+        const $input = document.getElementById('input-text');
+        const $lineCount = document.getElementById('line-count');
+        const $btnCheck = document.getElementById('btn-check');
+        const $btnText = document.getElementById('btn-text');
+        const $btnClear = document.getElementById('btn-clear');
+        const $progressContainer = document.getElementById('progress-container');
+        const $progressBar = document.getElementById('progress-bar');
+        const $progressStatus = document.getElementById('progress-status');
+        const $progressCount = document.getElementById('progress-count');
+        const $resultsBody = document.getElementById('results-body');
+        const $emptyState = document.getElementById('empty-state');
+        const $exportBar = document.getElementById('export-bar');
+        const $statTotal = document.getElementById('stat-total');
+        const $statLive = document.getElementById('stat-live');
+        const $statDie = document.getElementById('stat-die');
+        const $toast = document.getElementById('toast');
+
+        // ---------------------------------------------------------------------------
+        // Mode toggle
+        // ---------------------------------------------------------------------------
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (isRunning) return;
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode = btn.dataset.mode;
+
+                if (currentMode === 'session') {
+                    $input.placeholder = 'Dán access_token (eyJ...) hoặc session-token cookie\n\nMỗi dòng một token';
+                } else {
+                    $input.placeholder = 'user@example.com|Password123!|JBSWY3DPEHPK3PXP\nuser2@example.com|Pass456!|KRSXG5CTMVRXEZLU\n\nMỗi dòng một tài khoản, định dạng: email|password|2fa_secret';
+                }
+            });
+        });
+
+        // ---------------------------------------------------------------------------
+        // Line counter
+        // ---------------------------------------------------------------------------
+        $input.addEventListener('input', () => {
+            const lines = $input.value.trim().split('\n').filter(l => l.trim()).length;
+            $lineCount.textContent = lines;
+
+            // Save draft
+            localStorage.setItem('checker.draft', $input.value);
+            localStorage.setItem('checker.mode', currentMode);
+        });
+
+        // Restore draft
+        const savedDraft = localStorage.getItem('checker.draft');
+        const savedMode = localStorage.getItem('checker.mode');
+        if (savedDraft) {
+            $input.value = savedDraft;
+            $input.dispatchEvent(new Event('input'));
+        }
+        if (savedMode) {
+            document.querySelectorAll('.mode-btn').forEach(b => {
+                b.classList.toggle('active', b.dataset.mode === savedMode);
+            });
+            currentMode = savedMode;
+            if (currentMode === 'session') {
+                $input.placeholder = 'Dán access_token (eyJ...) hoặc session-token cookie\n\nMỗi dòng một token';
+            }
+        }
+
+        // ---------------------------------------------------------------------------
+        // Clear
+        // ---------------------------------------------------------------------------
+        $btnClear.addEventListener('click', () => {
+            if (isRunning) return;
+            if ($input.value && !confirm('Xóa toàn bộ nội dung?')) return;
+            $input.value = '';
+            $lineCount.textContent = '0';
+            localStorage.removeItem('checker.draft');
+            resetResults();
+        });
+
+        // ---------------------------------------------------------------------------
+        // Check
+        // ---------------------------------------------------------------------------
+        $btnCheck.addEventListener('click', async () => {
+            if (isRunning) {
+                // Stop not implemented for SSE yet — just warn
+                showToast('⏳ Đang chạy, vui lòng đợi...');
+                return;
+            }
+
+            const text = $input.value.trim();
+            if (!text) {
+                showToast('⚠️ Vui lòng nhập tài khoản hoặc token');
+                return;
+            }
+
+            const lines = text.split('\n').filter(l => l.trim());
+            if (lines.length === 0) {
+                showToast('⚠️ Không có dòng nào hợp lệ');
+                return;
+            }
+
+            // Start
+            isRunning = true;
+            results = [];
+            totalLines = lines.length;
+            $btnCheck.classList.add('running');
+            $btnText.textContent = 'Đang kiểm tra...';
+            $btnCheck.querySelector('span:first-child').innerHTML = '<span class="spinner"></span>';
+            $progressContainer.classList.add('active');
+            $progressBar.style.width = '0%';
+            $progressCount.textContent = `0 / ${totalLines}`;
+            $progressStatus.textContent = 'Đang kiểm tra...';
+            $resultsBody.innerHTML = '';
+            $emptyState.style.display = 'none';
+            $exportBar.style.display = 'none';
+            $statTotal.textContent = totalLines;
+            $statLive.textContent = '0';
+            $statDie.textContent = '0';
+
+            const concurrency = parseInt(document.getElementById('concurrency').value) || 3;
+
+            try {
+                const response = await fetch('/api/check', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        mode: currentMode,
+                        raw_text: text,
+                        concurrency: concurrency,
+                    }),
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (!line.startsWith('data: ')) continue;
+                        try {
+                            const event = JSON.parse(line.slice(6));
+                            handleEvent(event);
+                        } catch (e) {
+                            // ignore parse errors
+                        }
+                    }
+                }
+            } catch (err) {
+                showToast('❌ Lỗi kết nối: ' + err.message);
+            }
+
+            // Done
+            isRunning = false;
+            $btnCheck.classList.remove('running');
+            $btnText.textContent = 'Kiểm tra ngay';
+            $btnCheck.querySelector('span:first-child').textContent = '⚡';
+            $progressStatus.textContent = 'Hoàn tất!';
+            if (results.length > 0) {
+                $exportBar.style.display = 'flex';
+            }
+        });
+
+        // ---------------------------------------------------------------------------
+        // Event handler
+        // ---------------------------------------------------------------------------
+        function handleEvent(event) {
+            if (event.type === 'start') {
+                totalLines = event.total;
+                return;
+            }
+
+            if (event.type === 'result') {
+                const r = event.data;
+                results.push(r);
+
+                // Update progress
+                const pct = Math.round((results.length / totalLines) * 100);
+                $progressBar.style.width = pct + '%';
+                $progressCount.textContent = `${results.length} / ${totalLines}`;
+
+                // Update stats
+                const live = results.filter(r => r.status === 'live').length;
+                const die = results.length - live;
+                $statLive.textContent = live;
+                $statDie.textContent = die;
+
+                // Add row
+                addResultRow(r);
+                return;
+            }
+
+            if (event.type === 'done') {
+                $statLive.textContent = event.live;
+                $statDie.textContent = event.die;
+                showToast(`✅ Hoàn tất: ${event.live} Live / ${event.die} Die`);
+            }
+        }
+
+        function addResultRow(r) {
+            const tr = document.createElement('tr');
+            const idx = results.length;
+
+            const statusClass = r.status === 'live' ? 'live' : (r.status === 'deactivated' ? 'deactivated' : 'die');
+            const statusText = r.status === 'live' ? 'LIVE' : (r.status === 'deactivated' ? 'DEACT' : 'DIE');
+
+            const planClass = (r.plan || '').toLowerCase() || 'free';
+            const planText = r.plan || '-';
+
+            const detail = r.status === 'live'
+                ? (r.user || r.email || '')
+                : (r.error || 'check failed');
+
+            tr.innerHTML = `
+                <td style="color: var(--text-muted); font-size: 12px; font-weight: 500;">${idx}</td>
+                <td>
+                    <span class="badge ${statusClass}">
+                        <span class="badge-dot"></span>
+                        ${statusText}
+                    </span>
+                </td>
+                <td class="cell-email" title="${escapeHtml(r.email || r.input || '')}">${escapeHtml(r.email || r.input || '-')}</td>
+                <td>${r.status === 'live' ? `<span class="plan-badge ${planClass}">${planText}</span>` : '-'}</td>
+                <td class="${r.status !== 'live' ? 'cell-error' : ''}" title="${escapeHtml(detail)}">${escapeHtml(detail)}</td>
+            `;
+
+            $resultsBody.appendChild(tr);
+
+            // Auto scroll
+            const scroll = document.getElementById('results-scroll');
+            scroll.scrollTop = scroll.scrollHeight;
+        }
+
+        // ---------------------------------------------------------------------------
+        // Export
+        // ---------------------------------------------------------------------------
+        document.getElementById('btn-export-live').addEventListener('click', () => {
+            const lines = results.filter(r => r.status === 'live').map(r => r.email || r.input || '');
+            downloadText('live_accounts.txt', lines.join('\n'));
+            showToast(`📥 Exported ${lines.length} live accounts`);
+        });
+
+        document.getElementById('btn-export-die').addEventListener('click', () => {
+            const lines = results.filter(r => r.status !== 'live').map(r => (r.email || r.input || '') + ' | ' + (r.error || r.status));
+            downloadText('die_accounts.txt', lines.join('\n'));
+            showToast(`📥 Exported ${lines.length} die accounts`);
+        });
+
+        document.getElementById('btn-export-all').addEventListener('click', () => {
+            const lines = results.map(r => `${r.status.toUpperCase()} | ${r.email || r.input || ''} | ${r.plan || '-'} | ${r.error || 'ok'}`);
+            downloadText('all_results.txt', lines.join('\n'));
+            showToast(`📥 Exported ${lines.length} results`);
+        });
+
+        // ---------------------------------------------------------------------------
+        // Helpers
+        // ---------------------------------------------------------------------------
+        function resetResults() {
+            results = [];
+            totalLines = 0;
+            $resultsBody.innerHTML = '';
+            $emptyState.style.display = '';
+            $exportBar.style.display = 'none';
+            $progressContainer.classList.remove('active');
+            $statTotal.textContent = '0';
+            $statLive.textContent = '0';
+            $statDie.textContent = '0';
+        }
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.textContent = str || '';
+            return div.innerHTML;
+        }
+
+        function downloadText(filename, text) {
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function showToast(msg) {
+            $toast.textContent = msg;
+            $toast.classList.add('show');
+            setTimeout(() => $toast.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>
