@@ -70,6 +70,7 @@
             text-align: center;
             margin-bottom: 32px;
             padding: 32px 0 24px;
+            position: relative;
         }
 
         .header-icon {
@@ -671,6 +672,15 @@
             <div class="header-icon">🔍</div>
             <h1>ChatGPT Account Checker</h1>
             <p>Kiểm tra tình trạng tài khoản ChatGPT — Live or Die</p>
+            <a href="/admin"
+               style="position:absolute;top:20px;right:24px;display:inline-flex;align-items:center;gap:6px;
+                      background:var(--bg-elevated);border:1px solid var(--border);border-radius:20px;
+                      padding:6px 14px;font-size:12px;color:var(--text-secondary);text-decoration:none;
+                      transition:var(--transition);"
+               onmouseover="this.style.color='var(--text-primary)';this.style.borderColor='var(--border-hover)'"
+               onmouseout="this.style.color='var(--text-secondary)';this.style.borderColor='var(--border)'">
+                ⚙️ Admin
+            </a>
         </header>
 
         <div class="main-grid">
