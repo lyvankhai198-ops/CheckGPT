@@ -24,7 +24,7 @@ def init_db() -> None:
                 key_code   TEXT PRIMARY KEY,
                 created_at TEXT NOT NULL,
                 expires_at TEXT,
-                max_uses   INTEGER,        -- NULL = unlimited
+                max_uses   INTEGER,
                 use_count  INTEGER NOT NULL DEFAULT 0,
                 note       TEXT DEFAULT ''
             );
@@ -36,6 +36,16 @@ def init_db() -> None:
                 FOREIGN KEY (key_code) REFERENCES activation_keys(key_code)
             );
         """)
+        # Migrations — add columns added after initial deploy (safe to re-run)
+        for sql in [
+            "ALTER TABLE activation_keys ADD COLUMN max_uses INTEGER",
+            "ALTER TABLE activation_keys ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0",
+            "ALTER TABLE activation_keys ADD COLUMN note TEXT DEFAULT ''",
+        ]:
+            try:
+                conn.execute(sql)
+            except Exception:
+                pass  # column already exists
 
 
 def _now() -> str:
